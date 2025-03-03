@@ -1,0 +1,49 @@
+POST http://{{host}}:{{port}}/api/user/register HTTP/1.1
+Content-Type: application/json
+
+{
+	"login": "{{$random.email()}}",
+	"password": "{{$random.alphanumeric(16)}}"
+}
+
+###
+
+POST http://{{host}}:{{port}}/api/user/login HTTP/1.1
+Content-Type: application/json
+
+{
+	"login": "gopher2006",
+	"password": "dont-panic"
+}
+
+###
+
+POST http://{{host}}:{{port}}/api/user/orders HTTP/1.1
+Content-Type: text/plain
+
+12345678903
+
+###
+
+GET http://{{host}}:{{port}}/api/user/orders HTTP/1.1
+Content-Length: 0
+
+###
+
+GET http://{{host}}:{{port}}/api/user/balance HTTP/1.1
+Content-Length: 0
+
+###
+
+POST http://{{host}}:{{port}}/api/user/balance/withdraw HTTP/1.1
+Content-Type: application/json
+
+{
+	"order": "2377225624",
+    "sum": 751
+}
+
+###
+
+GET http://{{host}}:{{port}}/api/user/withdrawals HTTP/1.1
+Content-Length: 0
