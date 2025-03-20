@@ -1,51 +1,50 @@
 package server
 
 import (
+	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/rovany706/loyalty-gopher/internal/auth"
 	"github.com/rovany706/loyalty-gopher/internal/config"
 	"github.com/rovany706/loyalty-gopher/internal/database"
 	"github.com/rovany706/loyalty-gopher/internal/handlers"
 	"github.com/rovany706/loyalty-gopher/internal/repository"
+	"github.com/rovany706/loyalty-gopher/internal/routes"
 	"go.uber.org/zap"
 )
 
 type Server struct {
-	config         *config.Config
-	logger         *zap.Logger
-	database       *database.Database
-	userRepository repository.UserRepository
-	tokenManager   auth.TokenManager
+	config          *config.Config
+	logger          *zap.Logger
+	database        *database.Database
+	userRepository  repository.UserRepository
+	orderRepository repository.OrderRepository
+	tokenManager    auth.TokenManager
 }
 
 func NewServer(config *config.Config, logger *zap.Logger, database *database.Database) (*Server, error) {
 	userRepository := repository.NewDBUserRepository(database)
+	orderRepository := repository.NewDBOrderRepository(database)
 	tokenManager, err := auth.NewJWTTokenManager([]byte(config.TokenSecret))
 	if err != nil {
 		return nil, err
 	}
 
 	return &Server{
-		config:         config,
-		logger:         logger,
-		database:       database,
-		tokenManager:   tokenManager,
-		userRepository: userRepository,
+		config:          config,
+		logger:          logger,
+		database:        database,
+		tokenManager:    tokenManager,
+		userRepository:  userRepository,
+		orderRepository: orderRepository,
 	}, nil
 }
 
 func (s *Server) Run() error {
-	return s.getRouter().Run(s.config.RunAddress)
-}
-
-func (s *Server) getRouter() *gin.Engine {
 	r := gin.Default()
 
-	userAPIGroup := r.Group("/api/user")
-	{
-		userAPIGroup.POST("/register", handlers.RegisterHandler(s.userRepository, s.tokenManager))
-		userAPIGroup.POST("/login", handlers.LoginHandler(s.userRepository, s.tokenManager))
-	}
+	r.Use(gzip.Gzip(gzip.DefaultCompression))
+	routes.RegisterAuthHandlers(r, handlers.NewAuthHandlers(s.userRepository, s.tokenManager))
+	routes.RegisterOrderHandlers(r, handlers.NewOrderHandlers(s.orderRepository), s.tokenManager)
 
-	return r
+	return r.Run(s.config.RunAddress)
 }

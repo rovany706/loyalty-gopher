@@ -20,6 +20,5 @@ vendor/
 
 # IDEs directories
 .idea
-.vscode
 
 pgdata/

@@ -28,8 +28,15 @@ func (r *DBUserRepository) Register(ctx context.Context, login string, password 
 		return UnauthorizedUserID, err
 	}
 
-	row := r.db.DBConnection.QueryRowContext(ctx, "INSERT INTO users (username, pw_hash) VALUES ($1, $2) RETURNING id", login, hashedPassword)
+	tx, err := r.db.DBConnection.BeginTx(ctx, nil)
+	if err != nil {
+		return UnauthorizedUserID, err
+	}
 
+	defer tx.Rollback()
+
+	// create user
+	row := tx.QueryRowContext(ctx, "INSERT INTO users (username, pw_hash) VALUES ($1, $2) RETURNING id", login, hashedPassword)
 	err = row.Scan(&userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -38,6 +45,17 @@ func (r *DBUserRepository) Register(ctx context.Context, login string, password 
 		}
 
 		return UnauthorizedUserID, err
+	}
+
+	// create points account for user
+	_, err = tx.ExecContext(ctx, "INSERT INTO point_accounts (user_id, balance) VALUES ($1, 0)", userID)
+	if err != nil {
+		return UnauthorizedUserID, err
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		return UnauthorizedUserID, nil
 	}
 
 	return userID, nil
