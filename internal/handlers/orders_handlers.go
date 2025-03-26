@@ -1,21 +1,25 @@
 package handlers
 
 import (
+	"errors"
 	"io"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/rovany706/loyalty-gopher/internal/middleware"
+	"github.com/rovany706/loyalty-gopher/internal/helpers"
 	"github.com/rovany706/loyalty-gopher/internal/repository"
+	"github.com/rovany706/loyalty-gopher/internal/services"
 )
 
 type OrderHandlers struct {
 	orderRepository repository.OrderRepository
+	accrualService  services.AccrualService
 }
 
-func NewOrderHandlers(orderRepository repository.OrderRepository) *OrderHandlers {
+func NewOrderHandlers(orderRepository repository.OrderRepository, accrualService services.AccrualService) *OrderHandlers {
 	return &OrderHandlers{
 		orderRepository: orderRepository,
+		accrualService:  accrualService,
 	}
 }
 
@@ -29,7 +33,7 @@ func (oh *OrderHandlers) PostNewOrderHandler() gin.HandlerFunc {
 
 		orderNum := string(body)
 
-		ok, err := luhnCheck(orderNum)
+		ok, err := helpers.LuhnCheck(orderNum)
 		if err != nil {
 			ctx.AbortWithError(http.StatusInternalServerError, err)
 			return
@@ -40,7 +44,7 @@ func (oh *OrderHandlers) PostNewOrderHandler() gin.HandlerFunc {
 			return
 		}
 
-		userID, ok := getUserIDFromContext(ctx)
+		userID, ok := helpers.GetUserIDFromContext(ctx)
 		if !ok {
 			ctx.AbortWithStatus(http.StatusInternalServerError)
 			return
@@ -68,19 +72,37 @@ func (oh *OrderHandlers) PostNewOrderHandler() gin.HandlerFunc {
 			return
 		}
 
+		resp, err := oh.accrualService.GetOrderStatus(ctx, orderNum)
+
+		if err != nil {
+			if errors.Is(err, services.ErrRateLimit) { // ignore 429
+				ctx.Status(http.StatusCreated)
+				return
+			}
+
+			ctx.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
+		err = oh.orderRepository.UpdateOrderStatus(ctx, orderNum, resp.Status, resp.Accrual)
+		if err != nil {
+			ctx.AbortWithError(http.StatusInternalServerError, err)
+			return
+		}
+
 		ctx.Status(http.StatusCreated)
 	}
 }
 
 func (oh *OrderHandlers) GetUserOrdersHandler() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		userID, ok := getUserIDFromContext(ctx)
+		userID, ok := helpers.GetUserIDFromContext(ctx)
 		if !ok {
 			ctx.AbortWithStatus(http.StatusInternalServerError)
 			return
 		}
 
-		orders, err := oh.orderRepository.GetUserOrders(ctx, userID)
+		orders, err := oh.accrualService.GetUserOrders(ctx, userID)
 		if err != nil {
 			ctx.AbortWithError(http.StatusInternalServerError, err)
 			return
@@ -93,55 +115,4 @@ func (oh *OrderHandlers) GetUserOrdersHandler() gin.HandlerFunc {
 
 		ctx.JSON(http.StatusOK, orders)
 	}
-}
-
-func getUserIDFromContext(ctx *gin.Context) (int, bool) {
-	userIDStr, exists := ctx.Get(middleware.UserIDContextKey)
-	if !exists {
-		return -1, false
-	}
-
-	userID, ok := userIDStr.(int)
-	if !ok {
-		return -1, false
-	}
-
-	return userID, true
-}
-
-func convertStringToIntSlice(str string) ([]int, error) {
-	nums := make([]int, len(str))
-	for i, s := range str {
-		nums[i] = int(s - '0')
-	}
-
-	return nums, nil
-}
-
-func luhnCheck(orderNum string) (bool, error) {
-	orderNums, err := convertStringToIntSlice(orderNum)
-	if err != nil {
-		return false, err
-	}
-
-	if len(orderNums) == 0 {
-		return false, nil
-	}
-
-	sum := 0
-	parity := len(orderNums) % 2
-
-	for i := range orderNums {
-		digit := orderNums[i]
-		if i%2 == parity {
-			digit *= 2
-			if digit > 9 {
-				digit -= 9
-			}
-		}
-
-		sum += digit
-	}
-
-	return sum%10 == 0, nil
 }

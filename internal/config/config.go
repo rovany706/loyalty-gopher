@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"net/url"
 
 	"github.com/caarlos0/env/v11"
 	"go.uber.org/zap"
@@ -21,7 +22,7 @@ type Config struct {
 const (
 	defaultRunAddress     = ":8081"
 	defaultDatabaseUri    = "postgresql://app:example@localhost:5432/gophermartdb"
-	defaultAccrualAddress = ":8080"
+	defaultAccrualAddress = "http://localhost:8080/"
 	defaultLogLevel       = "info"
 	defaultTokenSecret    = "secret"
 )
@@ -111,7 +112,7 @@ func validateParsedArgs(config *Config) error {
 		return ErrInvalidRunAddress
 	}
 
-	if _, err := net.ResolveTCPAddr("tcp", config.AccrualAddress); err != nil {
+	if !isURL(config.AccrualAddress) {
 		return ErrInvalidAccrualAddress
 	}
 
@@ -124,4 +125,9 @@ func validateParsedArgs(config *Config) error {
 	}
 
 	return nil
+}
+
+func isURL(str string) bool {
+	u, err := url.Parse(str)
+	return err == nil && u.Scheme != "" && u.Host != ""
 }

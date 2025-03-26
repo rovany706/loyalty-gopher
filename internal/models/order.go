@@ -18,7 +18,7 @@ func (t OrderTime) MarshalJSON() ([]byte, error) {
 type AccrualStatus string
 
 const (
-	AccrualStatusNew        AccrualStatus = "NEW"
+	AccrualStatusRegistered AccrualStatus = "REGISTERED"
 	AccrualStatusInvalid    AccrualStatus = "INVALID"
 	AccrualStatusProcessed  AccrualStatus = "PROCESSED"
 	AccrualStatusProcessing AccrualStatus = "PROCESSING"

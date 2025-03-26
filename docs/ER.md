@@ -24,6 +24,8 @@ erDiagram
     POINTS-ACCOUNT ||--o{ WITHDRAWAL-HISTORY : has
     WITHDRAWAL-HISTORY {
         id int
+        order_num string
         amount decimal
+        processed_at timestamp
     }
 ```

@@ -23,3 +23,13 @@ func RegisterOrderHandlers(r *gin.Engine, orderHandlers *handlers.OrderHandlers,
 		orderGroup.GET("/orders", orderHandlers.GetUserOrdersHandler())
 	}
 }
+
+func RegisterPointsHandlers(r *gin.Engine, ph *handlers.PointsHandlers, tm auth.TokenManager) {
+	pointsGroup := r.Group("/api/user")
+	{
+		pointsGroup.Use(middleware.AuthUser(tm))
+		pointsGroup.GET("/balance", ph.UserBalanceHandler())
+		pointsGroup.POST("/balance/withdraw", ph.WithdrawPointsHandler())
+		pointsGroup.GET("/withdrawals", ph.GetUserWithdrawalHistory())
+	}
+}

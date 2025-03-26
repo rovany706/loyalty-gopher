@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/rovany706/loyalty-gopher/internal/database"
 	"github.com/rovany706/loyalty-gopher/internal/models"
+	"github.com/shopspring/decimal"
 )
 
 type DBOrderRepository struct {
@@ -36,7 +37,7 @@ func (r *DBOrderRepository) GetOrder(ctx context.Context, orderNum string) (*mod
 }
 
 func (r *DBOrderRepository) AddOrder(ctx context.Context, userID int, orderNum string) error {
-	_, err := r.db.DBConnection.ExecContext(ctx, "INSERT INTO orders (order_num, user_id, uploaded_at, accrual_status, accrual) VALUES ($1, $2, CURRENT_TIMESTAMP, $3, 0)", orderNum, userID, models.AccrualStatusNew)
+	_, err := r.db.DBConnection.ExecContext(ctx, "INSERT INTO orders (order_num, user_id, accrual_status, accrual) VALUES ($1, $2, $3, 0)", orderNum, userID, models.AccrualStatusRegistered)
 
 	if err != nil {
 		var pgErr *pgconn.PgError
@@ -79,4 +80,29 @@ func (r *DBOrderRepository) GetUserOrders(ctx context.Context, userID int) ([]mo
 	}
 
 	return orders, nil
+}
+
+func (r *DBOrderRepository) UpdateOrderStatus(ctx context.Context, orderNum string, newAccrualStatus models.AccrualStatus, accrualAmount *decimal.Decimal) error {
+	tx, err := r.db.DBConnection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	if accrualAmount == nil {
+		accrualAmount = &decimal.Zero
+	}
+	_, err = tx.ExecContext(ctx, "UPDATE orders SET accrual_status=$1, accrual=$2 WHERE order_num=$3", newAccrualStatus, *accrualAmount, orderNum)
+
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

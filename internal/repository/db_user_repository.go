@@ -55,7 +55,7 @@ func (r *DBUserRepository) Register(ctx context.Context, login string, password 
 
 	err = tx.Commit()
 	if err != nil {
-		return UnauthorizedUserID, nil
+		return UnauthorizedUserID, err
 	}
 
 	return userID, nil
