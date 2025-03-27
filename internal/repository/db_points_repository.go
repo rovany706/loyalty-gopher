@@ -111,3 +111,38 @@ func (pr *DBPointsRepository) WithdrawPoints(ctx context.Context, userID int, or
 
 	return nil
 }
+
+func (pr *DBPointsRepository) AddPoints(ctx context.Context, userID int, amount decimal.Decimal) error {
+	tx, err := pr.db.DBConnection.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+
+	var userPointsAccount struct {
+		id      int
+		balance decimal.Decimal
+	}
+	row := tx.QueryRowContext(ctx, "SELECT id, balance FROM point_accounts WHERE user_id=$1", userID)
+
+	err = row.Scan(&userPointsAccount.id, &userPointsAccount.balance)
+
+	if err != nil {
+		return err
+	}
+
+	newBalance := userPointsAccount.balance.Add(amount)
+	_, err = tx.ExecContext(ctx, "UPDATE point_accounts SET balance=$1 WHERE user_id=$2", newBalance, userID)
+
+	if err != nil {
+		return err
+	}
+
+	err = tx.Commit()
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

@@ -78,7 +78,7 @@ func (oh *OrderHandlers) PostNewOrderHandler() gin.HandlerFunc {
 			return
 		}
 
-		ctx.Status(http.StatusCreated)
+		ctx.Status(http.StatusAccepted)
 	}
 }
 

@@ -45,22 +45,24 @@ type workerResult struct {
 }
 
 type AccrualServiceImpl struct {
-	httpClient      *resty.Client
-	orderRepository repository.OrderRepository
-	isRateLimited   bool
-	jobsCh          chan workerJob
-	buffer          *jobBuffer
-	mutex           sync.Mutex
+	httpClient       *resty.Client
+	orderRepository  repository.OrderRepository
+	pointsRepository repository.PointsRepository
+	isRateLimited    bool
+	jobsCh           chan workerJob
+	buffer           *jobBuffer
+	mutex            sync.Mutex
 }
 
-func NewAccrualService(config *config.Config, orderRepository repository.OrderRepository) AccrualService {
+func NewAccrualService(config *config.Config, orderRepository repository.OrderRepository, pointsRepository repository.PointsRepository) AccrualService {
 	client := resty.New()
 	client.SetBaseURL(config.AccrualAddress)
 
 	return &AccrualServiceImpl{
-		httpClient:      client,
-		orderRepository: orderRepository,
-		buffer:          NewJobBuffer(),
+		httpClient:       client,
+		orderRepository:  orderRepository,
+		pointsRepository: pointsRepository,
+		buffer:           NewJobBuffer(),
 	}
 }
 
@@ -139,7 +141,7 @@ func (a *AccrualServiceImpl) GetUserOrders(ctx context.Context, userID int) ([]m
 	}
 
 	for _, order := range orders {
-		if !isOrderAccrualCalculated(order) {
+		if !isOrderAccrualCalculated(order.AccrualStatus) {
 			err := a.QueueStatusUpdate(ctx, order.OrderNum) // queue update
 			if err != nil {
 				return nil, err
@@ -157,7 +159,7 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(ctx context.Context, orderNum str
 		return err
 	}
 
-	if !isOrderAccrualCalculated(*order) {
+	if !isOrderAccrualCalculated(order.AccrualStatus) {
 		job := workerJob{
 			orderNum: orderNum,
 			resultCh: make(chan workerResult),
@@ -168,6 +170,9 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(ctx context.Context, orderNum str
 			result := <-job.resultCh
 			if order.AccrualStatus != result.response.Status {
 				a.orderRepository.UpdateOrderStatus(context.Background(), orderNum, result.response.Status, result.response.Accrual) // ctx? err?
+				if isOrderAccrualCalculated(result.response.Status) {
+					a.pointsRepository.AddPoints(context.Background(), order.UserID, *result.response.Accrual)
+				}
 			}
 		}()
 	}
@@ -175,6 +180,6 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(ctx context.Context, orderNum str
 	return nil
 }
 
-func isOrderAccrualCalculated(order models.Order) bool {
-	return order.AccrualStatus != models.AccrualStatusInvalid && order.AccrualStatus != models.AccrualStatusProcessed
+func isOrderAccrualCalculated(accrualStatus models.AccrualStatus) bool {
+	return accrualStatus != models.AccrualStatusInvalid && accrualStatus != models.AccrualStatusProcessed
 }
