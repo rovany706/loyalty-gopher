@@ -30,6 +30,7 @@ func NewServer(config *config.Config, logger *zap.Logger, database *database.Dat
 	pointsRepository := repository.NewDBPointsRepository(database)
 	tokenManager, err := auth.NewJWTTokenManager([]byte(config.TokenSecret))
 	accrualService := services.NewAccrualService(config, orderRepository)
+	accrualService.StartWorker()
 	if err != nil {
 		return nil, err
 	}

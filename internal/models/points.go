@@ -1,8 +1,6 @@
 package models
 
 import (
-	"time"
-
 	"github.com/shopspring/decimal"
 )
 
@@ -14,7 +12,7 @@ type GetUserBalanceResponse struct {
 type WithdrawHistoryEntry struct {
 	OrderNum    string          `json:"order"`
 	WithdrawSum decimal.Decimal `json:"sum"`
-	ProcessedAt time.Time       `json:"processed_at"`
+	ProcessedAt RFC3339Time     `json:"processed_at"`
 }
 
 type WithdrawUserPointsRequest struct {

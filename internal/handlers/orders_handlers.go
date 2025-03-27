@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"io"
 	"net/http"
 
@@ -72,19 +71,8 @@ func (oh *OrderHandlers) PostNewOrderHandler() gin.HandlerFunc {
 			return
 		}
 
-		resp, err := oh.accrualService.GetOrderStatus(ctx, orderNum)
+		err = oh.accrualService.QueueStatusUpdate(ctx, orderNum)
 
-		if err != nil {
-			if errors.Is(err, services.ErrRateLimit) { // ignore 429
-				ctx.Status(http.StatusCreated)
-				return
-			}
-
-			ctx.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
-
-		err = oh.orderRepository.UpdateOrderStatus(ctx, orderNum, resp.Status, resp.Accrual)
 		if err != nil {
 			ctx.AbortWithError(http.StatusInternalServerError, err)
 			return

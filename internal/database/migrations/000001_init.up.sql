@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS orders (
     order_num TEXT UNIQUE NOT NULL,
     uploaded_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
     accrual_status e_accrual_status NOT NULL,
-    accrual NUMERIC(12,2),
+    accrual NUMERIC(12,2) NOT NULL,
     user_id INT REFERENCES users(id)
 );
 
