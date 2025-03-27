@@ -4,6 +4,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"log"
 	"net"
 	"net/url"
 
@@ -99,6 +100,8 @@ func ParseArgs(programName string, args []string) (config *Config, err error) {
 	if err := env.Parse(config); err != nil {
 		return nil, err
 	}
+
+	log.Printf("Parsed app config: %+v\n", config)
 
 	if err := validateParsedArgs(config); err != nil {
 		return nil, err
