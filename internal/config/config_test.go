@@ -38,7 +38,7 @@ func TestParseFlags(t *testing.T) {
 		{
 			"only database URI",
 			[]string{programName, "-d", "postgresql://user@localhost/db"},
-			*NewConfig(WithDatabaseUri("postgresql://user@localhost/db")),
+			*NewConfig(WithDatabaseURI("postgresql://user@localhost/db")),
 		},
 		{
 			"only token secret",
@@ -48,7 +48,7 @@ func TestParseFlags(t *testing.T) {
 		{
 			"full args",
 			[]string{programName, "-a", ":8888", "-d", "postgresql://user@localhost/db", "-l", "debug", "-r", ":8080", "-t", "supersecretkey"},
-			*NewConfig(WithRunAddress(":8888"), WithLogLevel("debug"), WithAccrualAddress(":8080"), WithDatabaseUri("postgresql://user@localhost/db"), WithTokenSecret("supersecretkey")),
+			*NewConfig(WithRunAddress(":8888"), WithLogLevel("debug"), WithAccrualAddress(":8080"), WithDatabaseURI("postgresql://user@localhost/db"), WithTokenSecret("supersecretkey")),
 		},
 	}
 
@@ -81,7 +81,7 @@ func TestParseArgsErr(t *testing.T) {
 		{
 			"invalid Database URI",
 			[]string{programName, "-d", ""},
-			ErrInvalidDatabaseUri,
+			ErrInvalidDatabaseURI,
 		},
 		{
 			"invalid LogLevel",

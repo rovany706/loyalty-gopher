@@ -14,7 +14,7 @@ import (
 
 type Config struct {
 	RunAddress     string `env:"RUN_ADDRESS"`
-	DatabaseUri    string `env:"DATABASE_URI"`
+	DatabaseURI    string `env:"DATABASE_URI"`
 	AccrualAddress string `env:"ACCRUAL_SYSTEM_ADDRESS"`
 	LogLevel       string `env:"LOG_LEVEL"`
 	TokenSecret    string `env:"TOKEN_SECRET"`
@@ -22,15 +22,15 @@ type Config struct {
 
 const (
 	defaultRunAddress     = ":8081"
-	defaultDatabaseUri    = "postgresql://app:example@localhost:5432/gophermartdb"
-	defaultAccrualAddress = "http://localhost:8080/"
+	defaultDatabaseURI    = "postgresql://app:example@localhost:5432/gophermartdb"
+	defaultAccrualAddress = "http://localhost:8080"
 	defaultLogLevel       = "info"
 	defaultTokenSecret    = "secret"
 )
 
 var (
 	ErrInvalidRunAddress     = errors.New("invalid run address")
-	ErrInvalidDatabaseUri    = errors.New("invalid database URI")
+	ErrInvalidDatabaseURI    = errors.New("invalid database URI")
 	ErrInvalidAccrualAddress = errors.New("invalid accrual address")
 	ErrInvalidLogLevel       = errors.New("invalid log level")
 )
@@ -43,9 +43,9 @@ func WithRunAddress(runAddress string) Option {
 	}
 }
 
-func WithDatabaseUri(databaseUri string) Option {
+func WithDatabaseURI(databaseURI string) Option {
 	return func(config *Config) {
-		config.DatabaseUri = databaseUri
+		config.DatabaseURI = databaseURI
 	}
 }
 
@@ -70,7 +70,7 @@ func WithTokenSecret(tokenSecret string) Option {
 func NewConfig(opts ...Option) *Config {
 	config := &Config{
 		RunAddress:     defaultRunAddress,
-		DatabaseUri:    defaultDatabaseUri,
+		DatabaseURI:    defaultDatabaseURI,
 		AccrualAddress: defaultAccrualAddress,
 		LogLevel:       defaultLogLevel,
 		TokenSecret:    defaultTokenSecret,
@@ -88,7 +88,7 @@ func ParseArgs(programName string, args []string) (config *Config, err error) {
 	flags := flag.NewFlagSet(programName, flag.ExitOnError)
 
 	flags.StringVar(&config.RunAddress, "a", defaultRunAddress, fmt.Sprintf("address and port to run server (default: %s)", defaultRunAddress))
-	flags.StringVar(&config.DatabaseUri, "d", defaultDatabaseUri, fmt.Sprintf("database DSN (default: %s)", defaultDatabaseUri))
+	flags.StringVar(&config.DatabaseURI, "d", defaultDatabaseURI, fmt.Sprintf("database DSN (default: %s)", defaultDatabaseURI))
 	flags.StringVar(&config.AccrualAddress, "r", defaultAccrualAddress, fmt.Sprintf("address and port of accrual system (default: %s)", defaultAccrualAddress))
 	flags.StringVar(&config.LogLevel, "l", defaultLogLevel, fmt.Sprintf("log level (default: %s)", defaultLogLevel))
 	flags.StringVar(&config.TokenSecret, "t", defaultTokenSecret, fmt.Sprintf("token secret (default: %s)", defaultTokenSecret))
@@ -123,8 +123,8 @@ func validateParsedArgs(config *Config) error {
 		return ErrInvalidLogLevel
 	}
 
-	if config.DatabaseUri == "" {
-		return ErrInvalidDatabaseUri
+	if config.DatabaseURI == "" {
+		return ErrInvalidDatabaseURI
 	}
 
 	return nil

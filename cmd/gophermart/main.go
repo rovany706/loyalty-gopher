@@ -28,12 +28,12 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 
-	database, err := database.InitConnection(ctx, config.DatabaseUri)
+	database, err := database.InitConnection(ctx, config.DatabaseURI)
 	if err != nil {
 		logger.Fatal("error connecting to database", zap.Error(err))
 	}
 
-	err = database.RunMigrations(ctx)
+	err = database.EnsureCreated(ctx)
 	if err != nil {
 		logger.Fatal("error running migrations", zap.Error(err))
 	}
