@@ -42,7 +42,7 @@ func (r *DBOrderRepository) GetOrder(ctx context.Context, orderNum string) (*mod
 func (r *DBOrderRepository) AddOrder(ctx context.Context, userID int, orderNum string) error {
 	_, err := r.db.DBConnection.ExecContext(ctx, "INSERT INTO orders (order_num, user_id, accrual_status, accrual) VALUES ($1, $2, $3, 0)", orderNum, userID, models.AccrualStatusRegistered)
 
-	r.logger.Info("added order", zap.String("num", orderNum))
+	r.logger.Info("added order", zap.String("num", orderNum), zap.Int("user_id", userID))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgerrcode.IsIntegrityConstraintViolation(pgErr.Code) {

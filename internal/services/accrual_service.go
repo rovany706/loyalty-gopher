@@ -15,16 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-type OrderStatus string
-
-const (
-	Registered OrderStatus = "REGISTERED"
-	Processing OrderStatus = "PROCESSING"
-	Invalid    OrderStatus = "INVALID"
-	Processed  OrderStatus = "PROCESSED"
-)
-
-type AccrualServiceResponse struct {
+type accrualServiceResponse struct {
 	OrderNum string               `json:"order"`
 	Status   models.AccrualStatus `json:"status"`
 	Accrual  *decimal.Decimal     `json:"accrual,omitempty"`
@@ -42,7 +33,7 @@ type workerJob struct {
 }
 
 type workerResult struct {
-	response *AccrualServiceResponse
+	response *accrualServiceResponse
 	err      error
 }
 
@@ -72,9 +63,8 @@ func NewAccrualService(config *config.Config, orderRepository repository.OrderRe
 }
 
 func (a *AccrualServiceImpl) StartWorker() {
-	a.logger.Info("started worker")
 	go func() {
-		a.logger.Info("started goroutine")
+		a.logger.Info("started worker")
 
 		for job := range a.jobsCh {
 			a.logger.Info("got job", zap.String("order_num", job.orderNum))
@@ -84,7 +74,7 @@ func (a *AccrualServiceImpl) StartWorker() {
 				continue
 			}
 
-			responseBody := AccrualServiceResponse{}
+			responseBody := accrualServiceResponse{}
 			resp, err := a.httpClient.R().
 				SetResult(&responseBody).
 				SetPathParam("orderNum", job.orderNum).
@@ -98,8 +88,8 @@ func (a *AccrualServiceImpl) StartWorker() {
 				job.resultCh <- result
 				continue
 			}
-			a.logger.Info("sent request", zap.String("url", resp.Request.URL))
 
+			a.logger.Info("sent request", zap.String("url", resp.Request.URL))
 			a.logger.Info("response from service", zap.Int("code", resp.StatusCode()), zap.String("body", string(resp.Body())))
 
 			if resp.StatusCode() == http.StatusTooManyRequests {
@@ -140,7 +130,6 @@ func (a *AccrualServiceImpl) StartWorker() {
 
 			job.resultCh <- result
 		}
-		a.logger.Info("no jobs. exiting")
 	}()
 }
 
@@ -170,12 +159,13 @@ func (a *AccrualServiceImpl) GetUserOrders(ctx context.Context, userID int) ([]m
 
 	for i, order := range orders {
 		if !isOrderAccrualCalculated(order.AccrualStatus) {
-			err := a.QueueStatusUpdate(ctx, order.OrderNum) // queue update
+			err := a.QueueStatusUpdate(ctx, order.OrderNum)
 			if err != nil {
 				return nil, err
 			}
 		}
 
+		// TODO: убрать костыль
 		if order.AccrualStatus == models.AccrualStatusRegistered {
 			orders[i].AccrualStatus = models.AccrualStatusNew
 		}
@@ -190,8 +180,7 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(ctx context.Context, orderNum str
 	if err != nil {
 		return err
 	}
-	a.logger.Info("order status", zap.String("status", string(order.AccrualStatus)))
-	a.logger.Info("is calculated", zap.Bool("result", isOrderAccrualCalculated(order.AccrualStatus)))
+	a.logger.Info("current order status", zap.String("status", string(order.AccrualStatus)))
 
 	if !isOrderAccrualCalculated(order.AccrualStatus) {
 		job := workerJob{
@@ -203,7 +192,6 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(ctx context.Context, orderNum str
 			a.jobsCh <- job
 			a.logger.Info("put job", zap.String("order_num", job.orderNum))
 			result := <-job.resultCh
-			//a.logger.Info("got job result", zap.String("accrual", result.response.Accrual.String()), zap.Error(result.err))
 			if result.err != nil {
 				a.logger.Info("error", zap.Error(result.err))
 				return
@@ -211,9 +199,10 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(ctx context.Context, orderNum str
 			a.logger.Info("statuses", zap.String("old", string(order.AccrualStatus)), zap.String("new", string(result.response.Status)))
 
 			if order.AccrualStatus != result.response.Status {
+				// err игнорится, плохо :(
 				a.orderRepository.UpdateOrderStatus(context.Background(), orderNum, result.response.Status, result.response.Accrual) // ctx? err?
-				a.logger.Info("is calculated", zap.Bool("result", isOrderAccrualCalculated(result.response.Status)))
 				if isOrderAccrualCalculated(result.response.Status) {
+					// same
 					a.pointsRepository.AddPoints(context.Background(), order.UserID, *result.response.Accrual)
 				}
 			}
