@@ -36,10 +36,10 @@ func main() {
 		logger.Fatal("error connecting to database", zap.Error(err))
 	}
 
-	// err = database.EnsureCreated(ctx)
-	// if err != nil {
-	// 	logger.Fatal("error running migrations", zap.Error(err))
-	// }
+	err = database.EnsureCreated(ctx)
+	if err != nil {
+		logger.Fatal("error running migrations", zap.Error(err))
+	}
 
 	server, err := server.NewServer(config, logger, database)
 	if err != nil {
