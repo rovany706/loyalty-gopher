@@ -6,15 +6,18 @@ import (
 	"github.com/rovany706/loyalty-gopher/internal/database"
 	"github.com/rovany706/loyalty-gopher/internal/models"
 	"github.com/shopspring/decimal"
+	"go.uber.org/zap"
 )
 
 type DBPointsRepository struct {
-	db *database.Database
+	db     *database.Database
+	logger *zap.Logger
 }
 
-func NewDBPointsRepository(db *database.Database) *DBPointsRepository {
+func NewDBPointsRepository(db *database.Database, logger *zap.Logger) *DBPointsRepository {
 	return &DBPointsRepository{
-		db: db,
+		db:     db,
+		logger: logger,
 	}
 }
 
@@ -86,6 +89,7 @@ func (pr *DBPointsRepository) WithdrawPoints(ctx context.Context, userID int, or
 	}
 
 	if userPointsAccount.balance.LessThan(amount) {
+		pr.logger.Info("not enough points", zap.String("balance", userPointsAccount.balance.String()), zap.String("required", amount.String()))
 		return ErrNotEnoughPoints
 	}
 
@@ -134,6 +138,7 @@ func (pr *DBPointsRepository) AddPoints(ctx context.Context, userID int, amount 
 	newBalance := userPointsAccount.balance.Add(amount)
 	_, err = tx.ExecContext(ctx, "UPDATE point_accounts SET balance=$1 WHERE user_id=$2", newBalance, userID)
 
+	pr.logger.Info("added points", zap.String("amount", amount.String()), zap.String("new_balance", newBalance.String()))
 	if err != nil {
 		return err
 	}

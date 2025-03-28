@@ -10,15 +10,18 @@ import (
 	"github.com/rovany706/loyalty-gopher/internal/database"
 	"github.com/rovany706/loyalty-gopher/internal/models"
 	"github.com/shopspring/decimal"
+	"go.uber.org/zap"
 )
 
 type DBOrderRepository struct {
-	db *database.Database
+	db     *database.Database
+	logger *zap.Logger
 }
 
-func NewDBOrderRepository(db *database.Database) *DBOrderRepository {
+func NewDBOrderRepository(db *database.Database, logger *zap.Logger) *DBOrderRepository {
 	return &DBOrderRepository{
-		db: db,
+		db:     db,
+		logger: logger,
 	}
 }
 
@@ -39,6 +42,7 @@ func (r *DBOrderRepository) GetOrder(ctx context.Context, orderNum string) (*mod
 func (r *DBOrderRepository) AddOrder(ctx context.Context, userID int, orderNum string) error {
 	_, err := r.db.DBConnection.ExecContext(ctx, "INSERT INTO orders (order_num, user_id, accrual_status, accrual) VALUES ($1, $2, $3, 0)", orderNum, userID, models.AccrualStatusRegistered)
 
+	r.logger.Info("added order", zap.String("num", orderNum))
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgerrcode.IsIntegrityConstraintViolation(pgErr.Code) {
@@ -90,17 +94,21 @@ func (r *DBOrderRepository) UpdateOrderStatus(ctx context.Context, orderNum stri
 	defer tx.Rollback()
 
 	if accrualAmount == nil {
+		r.logger.Info("accrual is nil")
 		accrualAmount = &decimal.Zero
 	}
 	_, err = tx.ExecContext(ctx, "UPDATE orders SET accrual_status=$1, accrual=$2 WHERE order_num=$3", newAccrualStatus, *accrualAmount, orderNum)
 
 	if err != nil {
+		r.logger.Info("err1", zap.Error(err))
+
 		return err
 	}
 
 	err = tx.Commit()
 
 	if err != nil {
+		r.logger.Info("err2", zap.Error(err))
 		return err
 	}
 

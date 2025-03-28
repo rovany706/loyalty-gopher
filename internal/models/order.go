@@ -7,6 +7,7 @@ import (
 type AccrualStatus string
 
 const (
+	AccrualStatusNew        AccrualStatus = "NEW"
 	AccrualStatusRegistered AccrualStatus = "REGISTERED"
 	AccrualStatusInvalid    AccrualStatus = "INVALID"
 	AccrualStatusProcessed  AccrualStatus = "PROCESSED"

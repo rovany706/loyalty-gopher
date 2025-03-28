@@ -26,10 +26,10 @@ type Server struct {
 
 func NewServer(config *config.Config, logger *zap.Logger, database *database.Database) (*Server, error) {
 	userRepository := repository.NewDBUserRepository(database)
-	orderRepository := repository.NewDBOrderRepository(database)
-	pointsRepository := repository.NewDBPointsRepository(database)
+	orderRepository := repository.NewDBOrderRepository(database, logger)
+	pointsRepository := repository.NewDBPointsRepository(database, logger)
 	tokenManager, err := auth.NewJWTTokenManager([]byte(config.TokenSecret))
-	accrualService := services.NewAccrualService(config, orderRepository, pointsRepository)
+	accrualService := services.NewAccrualService(config, orderRepository, pointsRepository, logger)
 	accrualService.StartWorker()
 	if err != nil {
 		return nil, err

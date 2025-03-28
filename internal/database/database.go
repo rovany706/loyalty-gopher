@@ -12,6 +12,7 @@ DROP TABLE IF EXISTS withdrawal_history;
 DROP TABLE IF EXISTS point_accounts;
 DROP TABLE IF EXISTS orders;
 DROP TABLE IF EXISTS users;
+DROP TYPE IF EXISTS e_accrual_status;
 
 CREATE TYPE e_accrual_status AS ENUM (
     'REGISTERED',
@@ -54,8 +55,8 @@ type Database struct {
 	DBConnection *sql.DB
 }
 
-func InitConnection(ctx context.Context, databaseUri string) (*Database, error) {
-	dbConnection, err := sql.Open("pgx", databaseUri)
+func InitConnection(ctx context.Context, databaseURI string) (*Database, error) {
+	dbConnection, err := sql.Open("pgx", databaseURI)
 	if err != nil {
 		return nil, err
 	}
@@ -73,6 +74,7 @@ func (db *Database) EnsureCreated(ctx context.Context) error {
 	return err
 }
 
+// not working in github workflow
 // func (db *Database) RunMigrations(ctx context.Context) error {
 // 	driver, err := pgx.WithInstance(db.DBConnection, &pgx.Config{})
 
