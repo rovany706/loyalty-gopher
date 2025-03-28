@@ -9,10 +9,13 @@ import (
 	"github.com/rovany706/loyalty-gopher/internal/database"
 	"github.com/rovany706/loyalty-gopher/internal/logger"
 	"github.com/rovany706/loyalty-gopher/internal/server"
+	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
 )
 
 func main() {
+	decimal.MarshalJSONWithoutQuotes = true
+
 	config, err := config.ParseArgs(os.Args[0], os.Args[1:])
 
 	if err != nil {
@@ -33,10 +36,10 @@ func main() {
 		logger.Fatal("error connecting to database", zap.Error(err))
 	}
 
-	err = database.EnsureCreated(ctx)
-	if err != nil {
-		logger.Fatal("error running migrations", zap.Error(err))
-	}
+	// err = database.EnsureCreated(ctx)
+	// if err != nil {
+	// 	logger.Fatal("error running migrations", zap.Error(err))
+	// }
 
 	server, err := server.NewServer(config, logger, database)
 	if err != nil {
