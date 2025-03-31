@@ -23,6 +23,7 @@ type accrualServiceResponse struct {
 
 type AccrualService interface {
 	StartWorker()
+	StopWorker()
 	QueueStatusUpdate(ctx context.Context, orderNum string) error
 	GetUserOrders(ctx context.Context, userID int) ([]models.Order, error)
 }
@@ -210,6 +211,10 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(ctx context.Context, orderNum str
 	}
 
 	return nil
+}
+
+func (a *AccrualServiceImpl) StopWorker() {
+	close(a.jobsCh)
 }
 
 func isOrderAccrualCalculated(accrualStatus models.AccrualStatus) bool {

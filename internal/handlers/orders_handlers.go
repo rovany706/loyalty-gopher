@@ -32,13 +32,7 @@ func (oh *OrderHandlers) PostNewOrderHandler() gin.HandlerFunc {
 
 		orderNum := string(body)
 
-		ok, err := helpers.LuhnCheck(orderNum)
-		if err != nil {
-			ctx.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
-
-		if !ok {
+		if ok := helpers.LuhnCheck(orderNum); !ok {
 			ctx.AbortWithStatus(http.StatusUnprocessableEntity)
 			return
 		}

@@ -1,6 +1,8 @@
 package server
 
 import (
+	"errors"
+
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
 	"github.com/rovany706/loyalty-gopher/internal/auth"
@@ -30,7 +32,7 @@ func NewServer(config *config.Config, logger *zap.Logger, database *database.Dat
 	pointsRepository := repository.NewDBPointsRepository(database, logger)
 	tokenManager, err := auth.NewJWTTokenManager([]byte(config.TokenSecret))
 	accrualService := services.NewAccrualService(config, orderRepository, pointsRepository, logger)
-	accrualService.StartWorker()
+
 	if err != nil {
 		return nil, err
 	}
@@ -47,7 +49,13 @@ func NewServer(config *config.Config, logger *zap.Logger, database *database.Dat
 	}, nil
 }
 
-func (s *Server) Run() error {
+func (s *Server) Run() (err error) {
+	s.accrualService.StartWorker()
+	defer s.accrualService.StopWorker()
+	defer func() {
+		err = errors.Join(err, s.database.Close())
+	}()
+
 	r := gin.Default()
 
 	r.Use(gzip.Gzip(gzip.DefaultCompression))

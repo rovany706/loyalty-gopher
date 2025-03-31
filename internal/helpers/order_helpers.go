@@ -1,22 +1,19 @@
 package helpers
 
-func convertStringToIntSlice(str string) ([]int, error) {
+func convertStringToIntSlice(str string) []int {
 	nums := make([]int, len(str))
 	for i, s := range str {
 		nums[i] = int(s - '0')
 	}
 
-	return nums, nil
+	return nums
 }
 
-func LuhnCheck(orderNum string) (bool, error) {
-	orderNums, err := convertStringToIntSlice(orderNum)
-	if err != nil {
-		return false, err
-	}
+func LuhnCheck(orderNum string) bool {
+	orderNums := convertStringToIntSlice(orderNum)
 
 	if len(orderNums) == 0 {
-		return false, nil
+		return false
 	}
 
 	sum := 0
@@ -34,5 +31,5 @@ func LuhnCheck(orderNum string) (bool, error) {
 		sum += digit
 	}
 
-	return sum%10 == 0, nil
+	return sum%10 == 0
 }

@@ -71,18 +71,12 @@ func (ph *PointsHandlers) WithdrawPointsHandler() gin.HandlerFunc {
 			return
 		}
 
-		ok, err := helpers.LuhnCheck(request.OrderNum)
-		if err != nil {
-			ctx.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
-
-		if !ok {
+		if ok := helpers.LuhnCheck(request.OrderNum); !ok {
 			ctx.AbortWithStatus(http.StatusUnprocessableEntity)
 			return
 		}
 
-		err = ph.pointsRepository.WithdrawPoints(ctx, userID, request.OrderNum, request.WithdrawSum)
+		err := ph.pointsRepository.WithdrawPoints(ctx, userID, request.OrderNum, request.WithdrawSum)
 		if err != nil {
 			if errors.Is(err, repository.ErrNotEnoughPoints) {
 				ctx.AbortWithStatus(http.StatusPaymentRequired)

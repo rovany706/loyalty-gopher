@@ -100,15 +100,12 @@ func (r *DBOrderRepository) UpdateOrderStatus(ctx context.Context, orderNum stri
 	_, err = tx.ExecContext(ctx, "UPDATE orders SET accrual_status=$1, accrual=$2 WHERE order_num=$3", newAccrualStatus, *accrualAmount, orderNum)
 
 	if err != nil {
-		r.logger.Info("err1", zap.Error(err))
-
 		return err
 	}
 
 	err = tx.Commit()
 
 	if err != nil {
-		r.logger.Info("err2", zap.Error(err))
 		return err
 	}
 
