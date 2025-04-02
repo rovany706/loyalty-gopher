@@ -121,7 +121,7 @@ func (r *DBOrderRepository) UpdateOrderStatus(ctx context.Context, orderNum stri
 	}
 
 	// if calculated, then add points
-	if !helpers.IsOrderAccrualCalculated(newAccrualStatus) {
+	if helpers.IsOrderAccrualCalculated(newAccrualStatus) {
 		_, err = tx.ExecContext(ctx, "UPDATE point_accounts SET balance=balance+$1 WHERE user_id=$2", accrualAmount, order.UserID)
 		if err != nil {
 			return err
