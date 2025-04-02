@@ -37,24 +37,22 @@ func (db *Database) Close() error {
 }
 
 func (db *Database) RunMigrations(ctx context.Context) error {
-	d, err := iofs.New(migrationsFS, "migrations")
+	fsDriver, err := iofs.New(migrationsFS, "migrations")
 	if err != nil {
 		return err
 	}
 
-	driver, err := pgx.WithInstance(db.DBConnection, &pgx.Config{})
-
+	dbDriver, err := pgx.WithInstance(db.DBConnection, &pgx.Config{})
 	if err != nil {
 		return err
 	}
 
-	m, err := migrate.NewWithInstance("iofs", d, "", driver)
+	m, err := migrate.NewWithInstance("iofs", fsDriver, "", dbDriver)
 	if err != nil {
 		return err
 	}
 
 	err = m.Up()
-
 	if err != nil && !errors.Is(err, migrate.ErrNoChange) {
 		return err
 	}

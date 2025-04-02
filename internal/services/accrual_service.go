@@ -93,28 +93,14 @@ func (a *AccrualServiceImpl) StartWorker() {
 			a.logger.Info("sent request", zap.String("url", resp.Request.URL))
 			a.logger.Info("response from service", zap.Int("code", resp.StatusCode()), zap.String("body", string(resp.Body())))
 
-			if resp.StatusCode() == http.StatusTooManyRequests {
-				rateLimitDuration, err := time.ParseDuration(resp.Header()["Retry-After"][0] + "s")
-				if err != nil {
-					result := workerResult{
-						response: nil,
-						err:      err,
-					}
-					job.resultCh <- result
-				}
-
-				a.mutex.Lock()
-				a.isRateLimited = true
-				a.mutex.Unlock()
-				a.logger.Info("rate limited", zap.Duration("duration", rateLimitDuration), zap.String("header", resp.Header()["Retry-After"][0]))
-
-				a.buffer.Add(job.orderNum, job)
-				go a.waitForRateLimit(rateLimitDuration)
+			statusCode := resp.StatusCode()
+			switch statusCode {
+			case http.StatusTooManyRequests:
+				a.handleTooManyRequests(resp, job)
 
 				continue
-			}
 
-			if resp.StatusCode() == http.StatusNoContent {
+			case http.StatusNoContent:
 				result := workerResult{
 					response: nil,
 					err:      fmt.Errorf("204 no content"),
@@ -132,6 +118,25 @@ func (a *AccrualServiceImpl) StartWorker() {
 			job.resultCh <- result
 		}
 	}()
+}
+
+func (a *AccrualServiceImpl) handleTooManyRequests(resp *resty.Response, job workerJob) {
+	rateLimitDuration, err := time.ParseDuration(resp.Header()["Retry-After"][0] + "s")
+	if err != nil {
+		result := workerResult{
+			response: nil,
+			err:      err,
+		}
+		job.resultCh <- result
+	}
+
+	a.mutex.Lock()
+	a.isRateLimited = true
+	a.mutex.Unlock()
+	a.logger.Info("rate limited", zap.Duration("duration", rateLimitDuration), zap.String("header", resp.Header()["Retry-After"][0]))
+
+	a.buffer.Add(job.orderNum, job)
+	go a.waitForRateLimit(rateLimitDuration)
 }
 
 func (a *AccrualServiceImpl) waitForRateLimit(retryAfter time.Duration) {
@@ -197,7 +202,6 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(ctx context.Context, orderNum str
 				a.logger.Info("error", zap.Error(result.err))
 				return
 			}
-			a.logger.Info("statuses", zap.String("old", string(order.AccrualStatus)), zap.String("new", string(result.response.Status)))
 
 			if order.AccrualStatus != result.response.Status {
 				// err игнорится, плохо :(
