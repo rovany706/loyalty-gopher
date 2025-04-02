@@ -2,17 +2,23 @@ package services
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"net/http"
 	"sync"
 	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/rovany706/loyalty-gopher/internal/config"
+	"github.com/rovany706/loyalty-gopher/internal/helpers"
 	"github.com/rovany706/loyalty-gopher/internal/models"
 	"github.com/rovany706/loyalty-gopher/internal/repository"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
+)
+
+var (
+	errRateLimit = errors.New("rate limit")
+	errNoContent = errors.New("no content")
 )
 
 type accrualServiceResponse struct {
@@ -24,8 +30,7 @@ type accrualServiceResponse struct {
 type AccrualService interface {
 	StartWorker()
 	StopWorker()
-	QueueStatusUpdate(ctx context.Context, orderNum string) error
-	GetUserOrders(ctx context.Context, userID int) ([]models.Order, error)
+	QueueStatusUpdate(order models.Order)
 }
 
 type workerJob struct {
@@ -69,9 +74,16 @@ func (a *AccrualServiceImpl) StartWorker() {
 
 		for job := range a.jobsCh {
 			a.logger.Info("got job", zap.String("order_num", job.orderNum))
+
 			if a.isRateLimited {
 				a.logger.Info("put job in buffer")
 				a.buffer.Add(job.orderNum, job)
+
+				result := workerResult{
+					response: nil,
+					err:      errRateLimit,
+				}
+				job.resultCh <- result
 				continue
 			}
 
@@ -93,17 +105,10 @@ func (a *AccrualServiceImpl) StartWorker() {
 			a.logger.Info("sent request", zap.String("url", resp.Request.URL))
 			a.logger.Info("response from service", zap.Int("code", resp.StatusCode()), zap.String("body", string(resp.Body())))
 
-			statusCode := resp.StatusCode()
-			switch statusCode {
-			case http.StatusTooManyRequests:
-				a.handleTooManyRequests(resp, job)
-
-				continue
-
-			case http.StatusNoContent:
+			if err := a.checkResponse(resp, job); err != nil {
 				result := workerResult{
 					response: nil,
-					err:      fmt.Errorf("204 no content"),
+					err:      err,
 				}
 
 				job.resultCh <- result
@@ -120,14 +125,29 @@ func (a *AccrualServiceImpl) StartWorker() {
 	}()
 }
 
-func (a *AccrualServiceImpl) handleTooManyRequests(resp *resty.Response, job workerJob) {
+func (a *AccrualServiceImpl) checkResponse(resp *resty.Response, job workerJob) error {
+	statusCode := resp.StatusCode()
+	switch statusCode {
+	case http.StatusTooManyRequests:
+		err := a.handleTooManyRequests(resp, job)
+
+		if err != nil {
+			return err
+		}
+
+		return errRateLimit
+
+	case http.StatusNoContent:
+		return errNoContent
+	}
+
+	return nil
+}
+
+func (a *AccrualServiceImpl) handleTooManyRequests(resp *resty.Response, job workerJob) error {
 	rateLimitDuration, err := time.ParseDuration(resp.Header()["Retry-After"][0] + "s")
 	if err != nil {
-		result := workerResult{
-			response: nil,
-			err:      err,
-		}
-		job.resultCh <- result
+		return err
 	}
 
 	a.mutex.Lock()
@@ -137,6 +157,8 @@ func (a *AccrualServiceImpl) handleTooManyRequests(resp *resty.Response, job wor
 
 	a.buffer.Add(job.orderNum, job)
 	go a.waitForRateLimit(rateLimitDuration)
+
+	return nil
 }
 
 func (a *AccrualServiceImpl) waitForRateLimit(retryAfter time.Duration) {
@@ -156,71 +178,36 @@ func (a *AccrualServiceImpl) waitForRateLimit(retryAfter time.Duration) {
 	}
 }
 
-func (a *AccrualServiceImpl) GetUserOrders(ctx context.Context, userID int) ([]models.Order, error) {
-	orders, err := a.orderRepository.GetUserOrders(ctx, userID)
-
-	if err != nil {
-		return nil, err
+func (a *AccrualServiceImpl) QueueStatusUpdate(order models.Order) {
+	if helpers.IsOrderAccrualCalculated(order.AccrualStatus) {
+		return
 	}
 
-	for i, order := range orders {
-		if !isOrderAccrualCalculated(order.AccrualStatus) {
-			err := a.QueueStatusUpdate(ctx, order.OrderNum)
-			if err != nil {
-				return nil, err
-			}
+	job := workerJob{
+		orderNum: order.OrderNum,
+		resultCh: make(chan workerResult),
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+	defer cancel()
+
+	go func() {
+		a.logger.Info("put new job", zap.String("order_num", job.orderNum))
+		a.jobsCh <- job
+
+		result := <-job.resultCh
+		if result.err != nil {
+			a.logger.Info("error processing job", zap.Error(result.err))
+			return
 		}
 
-		// TODO: убрать костыль
-		if order.AccrualStatus == models.AccrualStatusRegistered {
-			orders[i].AccrualStatus = models.AccrualStatusNew
+		err := a.orderRepository.UpdateOrderStatus(ctx, order.OrderNum, result.response.Status, result.response.Accrual)
+		if err != nil {
+			a.logger.Info("error updating order status", zap.Error(err))
 		}
-	}
-
-	return orders, nil
-}
-
-func (a *AccrualServiceImpl) QueueStatusUpdate(ctx context.Context, orderNum string) error {
-	order, err := a.orderRepository.GetOrder(ctx, orderNum)
-
-	if err != nil {
-		return err
-	}
-	a.logger.Info("current order status", zap.String("status", string(order.AccrualStatus)))
-
-	if !isOrderAccrualCalculated(order.AccrualStatus) {
-		job := workerJob{
-			orderNum: orderNum,
-			resultCh: make(chan workerResult),
-		}
-
-		go func() {
-			a.jobsCh <- job
-			a.logger.Info("put job", zap.String("order_num", job.orderNum))
-			result := <-job.resultCh
-			if result.err != nil {
-				a.logger.Info("error", zap.Error(result.err))
-				return
-			}
-
-			if order.AccrualStatus != result.response.Status {
-				// err игнорится, плохо :(
-				a.orderRepository.UpdateOrderStatus(context.Background(), orderNum, result.response.Status, result.response.Accrual) // ctx? err?
-				if isOrderAccrualCalculated(result.response.Status) {
-					// same
-					a.pointsRepository.AddPoints(context.Background(), order.UserID, *result.response.Accrual)
-				}
-			}
-		}()
-	}
-
-	return nil
+	}()
 }
 
 func (a *AccrualServiceImpl) StopWorker() {
 	close(a.jobsCh)
-}
-
-func isOrderAccrualCalculated(accrualStatus models.AccrualStatus) bool {
-	return accrualStatus == models.AccrualStatusInvalid || accrualStatus == models.AccrualStatusProcessed
 }

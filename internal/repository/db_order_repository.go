@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/rovany706/loyalty-gopher/internal/database"
+	"github.com/rovany706/loyalty-gopher/internal/helpers"
 	"github.com/rovany706/loyalty-gopher/internal/models"
 	"github.com/shopspring/decimal"
 	"go.uber.org/zap"
@@ -27,8 +28,8 @@ func NewDBOrderRepository(db *database.Database, logger *zap.Logger) *DBOrderRep
 
 func (r *DBOrderRepository) GetOrder(ctx context.Context, orderNum string) (*models.Order, error) {
 	row := r.db.DBConnection.QueryRowContext(ctx, "SELECT order_num, user_id, uploaded_at, accrual_status, accrual FROM orders WHERE order_num=$1", orderNum)
-	var order models.Order
-	err := row.Scan(&order.OrderNum, &order.UserID, &order.UploadedAt, &order.AccrualStatus, &order.Accrual)
+	order, err := scanOrderRow(row)
+
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
@@ -71,6 +72,10 @@ func (r *DBOrderRepository) GetUserOrders(ctx context.Context, userID int) ([]mo
 			order.Accrual = nil
 		}
 
+		if order.AccrualStatus == models.AccrualStatusRegistered {
+			order.AccrualStatus = models.AccrualStatusNew
+		}
+
 		orders = append(orders, order)
 	}
 
@@ -93,14 +98,34 @@ func (r *DBOrderRepository) UpdateOrderStatus(ctx context.Context, orderNum stri
 	}
 	defer tx.Rollback()
 
-	if accrualAmount == nil {
-		r.logger.Info("accrual is nil")
-		accrualAmount = &decimal.Zero
-	}
-	_, err = tx.ExecContext(ctx, "UPDATE orders SET accrual_status=$1, accrual=$2 WHERE order_num=$3", newAccrualStatus, *accrualAmount, orderNum)
-
+	// get order
+	row := tx.QueryRowContext(ctx, "SELECT order_num, user_id, uploaded_at, accrual_status, accrual FROM orders WHERE order_num=$1", orderNum)
+	order, err := scanOrderRow(row)
 	if err != nil {
 		return err
+	}
+
+	// check if status changed
+	if order.AccrualStatus == newAccrualStatus {
+		return nil
+	}
+
+	if accrualAmount == nil {
+		accrualAmount = &decimal.Zero
+	}
+
+	// update status
+	_, err = tx.ExecContext(ctx, "UPDATE orders SET accrual_status=$1, accrual=$2 WHERE order_num=$3", newAccrualStatus, *accrualAmount, orderNum)
+	if err != nil {
+		return err
+	}
+
+	// if calculated, then add points
+	if !helpers.IsOrderAccrualCalculated(newAccrualStatus) {
+		_, err = tx.ExecContext(ctx, "UPDATE point_accounts SET balance=balance+$1 WHERE user_id=$2", accrualAmount, order.UserID)
+		if err != nil {
+			return err
+		}
 	}
 
 	err = tx.Commit()
@@ -110,4 +135,14 @@ func (r *DBOrderRepository) UpdateOrderStatus(ctx context.Context, orderNum stri
 	}
 
 	return nil
+}
+
+func scanOrderRow(row *sql.Row) (models.Order, error) {
+	var order models.Order
+	err := row.Scan(&order.OrderNum, &order.UserID, &order.UploadedAt, &order.AccrualStatus, &order.Accrual)
+	if err != nil {
+		return order, err
+	}
+
+	return order, nil
 }

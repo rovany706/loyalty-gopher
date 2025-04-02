@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/rovany706/loyalty-gopher/internal/helpers"
+	"github.com/rovany706/loyalty-gopher/internal/models"
 	"github.com/rovany706/loyalty-gopher/internal/repository"
 	"github.com/rovany706/loyalty-gopher/internal/services"
 )
@@ -65,12 +66,11 @@ func (oh *OrderHandlers) PostNewOrderHandler() gin.HandlerFunc {
 			return
 		}
 
-		err = oh.accrualService.QueueStatusUpdate(ctx, orderNum)
-
-		if err != nil {
-			ctx.AbortWithError(http.StatusInternalServerError, err)
-			return
-		}
+		oh.accrualService.QueueStatusUpdate(models.Order{
+			UserID:        userID,
+			OrderNum:      orderNum,
+			AccrualStatus: models.AccrualStatusRegistered,
+		})
 
 		ctx.Status(http.StatusAccepted)
 	}
@@ -84,7 +84,8 @@ func (oh *OrderHandlers) GetUserOrdersHandler() gin.HandlerFunc {
 			return
 		}
 
-		orders, err := oh.accrualService.GetUserOrders(ctx, userID)
+		orders, err := oh.orderRepository.GetUserOrders(ctx, userID)
+
 		if err != nil {
 			ctx.AbortWithError(http.StatusInternalServerError, err)
 			return
@@ -93,6 +94,10 @@ func (oh *OrderHandlers) GetUserOrdersHandler() gin.HandlerFunc {
 		if len(orders) == 0 {
 			ctx.Status(http.StatusNoContent)
 			return
+		}
+
+		for _, order := range orders {
+			oh.accrualService.QueueStatusUpdate(order)
 		}
 
 		ctx.JSON(http.StatusOK, orders)

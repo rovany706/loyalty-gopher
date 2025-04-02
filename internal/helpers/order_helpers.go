@@ -1,5 +1,7 @@
 package helpers
 
+import "github.com/rovany706/loyalty-gopher/internal/models"
+
 func convertStringToIntSlice(str string) []int {
 	nums := make([]int, len(str))
 	for i, s := range str {
@@ -32,4 +34,8 @@ func LuhnCheck(orderNum string) bool {
 	}
 
 	return sum%10 == 0
+}
+
+func IsOrderAccrualCalculated(accrualStatus models.AccrualStatus) bool {
+	return accrualStatus == models.AccrualStatusInvalid || accrualStatus == models.AccrualStatusProcessed
 }
