@@ -188,9 +188,6 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(order models.Order) {
 		resultCh: make(chan workerResult),
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
-	defer cancel()
-
 	go func() {
 		a.logger.Info("put new job", zap.String("order_num", job.orderNum))
 		a.jobsCh <- job
@@ -200,6 +197,9 @@ func (a *AccrualServiceImpl) QueueStatusUpdate(order models.Order) {
 			a.logger.Info("error processing job", zap.Error(result.err))
 			return
 		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*20)
+		defer cancel()
 
 		err := a.orderRepository.UpdateOrderStatus(ctx, order.OrderNum, result.response.Status, result.response.Accrual)
 		if err != nil {
