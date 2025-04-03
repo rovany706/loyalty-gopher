@@ -12,6 +12,9 @@ erDiagram
     ORDER {
         id int
         order_num string
+        uploaded_at timestamp
+        accrual_status e_accrual_status
+        accrual decimal
     }
     USER ||--|| POINTS-ACCOUNT : has
     POINTS-ACCOUNT {
@@ -21,6 +24,8 @@ erDiagram
     POINTS-ACCOUNT ||--o{ WITHDRAWAL-HISTORY : has
     WITHDRAWAL-HISTORY {
         id int
+        order_num string
         amount decimal
+        processed_at timestamp
     }
 ```
